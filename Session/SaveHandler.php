@@ -3,15 +3,14 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
 namespace Magento\Framework\Session;
 
-use Magento\Framework\App\DeploymentConfig;
-use Magento\Framework\App\ObjectManager;
-use Magento\Framework\Exception\SessionException;
 use Magento\Framework\Session\Config\ConfigInterface;
+use Magento\Framework\Exception\SessionException;
 
 /**
- * Magento session save handler
+ * Magento session save handler.
  */
 class SaveHandler implements SaveHandlerInterface
 {
@@ -23,45 +22,37 @@ class SaveHandler implements SaveHandlerInterface
     protected $saveHandlerAdapter;
 
     /**
-     * Config
-     *
-     * @var ConfigInterface
+     * @var SaveHandlerFactory
      */
-    private $config;
+    private $saveHandlerFactory;
 
     /**
-     * Constructor
-     *
+     * @var ConfigInterface
+     */
+    private $sessionConfig;
+
+    /**
+     * @var string
+     */
+    private $defaultHandler;
+
+    /**
      * @param SaveHandlerFactory $saveHandlerFactory
-     * @param DeploymentConfig $deploymentConfig
+     * @param ConfigInterface $sessionConfig
      * @param string $default
      */
     public function __construct(
         SaveHandlerFactory $saveHandlerFactory,
-        DeploymentConfig $deploymentConfig,
+        ConfigInterface $sessionConfig,
         $default = self::DEFAULT_HANDLER
     ) {
-        /**
-         * Session handler
-         *
-         * Save handler may be set to custom value in deployment config, which will override everything else.
-         * Otherwise, try to read PHP settings for session.save_handler value. Otherwise, use 'files' as default.
-         */
-        $defaultSaveHandler = ini_get('session.save_handler') ?: SaveHandlerInterface::DEFAULT_HANDLER;
-        $saveMethod = $deploymentConfig->get(Config::PARAM_SESSION_SAVE_METHOD, $defaultSaveHandler);
-        $this->setSaveHandler($saveMethod);
-
-        try {
-            $connection = $saveHandlerFactory->create($saveMethod);
-        } catch (SessionException $e) {
-            $connection = $saveHandlerFactory->create($default);
-            $this->setSaveHandler($default);
-        }
-        $this->saveHandlerAdapter = $connection;
+        $this->saveHandlerFactory = $saveHandlerFactory;
+        $this->sessionConfig = $sessionConfig;
+        $this->defaultHandler = $default;
     }
 
     /**
-     * Open Session - retrieve resources
+     * Open Session - retrieve resources.
      *
      * @param string $savePath
      * @param string $name
@@ -69,32 +60,32 @@ class SaveHandler implements SaveHandlerInterface
      */
     public function open($savePath, $name)
     {
-        return $this->saveHandlerAdapter->open($savePath, $name);
+        return $this->callSafely('open', $savePath, $name);
     }
 
     /**
-     * Close Session - free resources
+     * Close Session - free resources.
      *
      * @return bool
      */
     public function close()
     {
-        return $this->saveHandlerAdapter->close();
+        return $this->callSafely('close');
     }
 
     /**
-     * Read session data
+     * Read session data.
      *
      * @param string $sessionId
      * @return string
      */
     public function read($sessionId)
     {
-        return $this->saveHandlerAdapter->read($sessionId);
+        return $this->callSafely('read', $sessionId);
     }
 
     /**
-     * Write Session - commit data to resource
+     * Write Session - commit data to resource.
      *
      * @param string $sessionId
      * @param string $data
@@ -102,23 +93,22 @@ class SaveHandler implements SaveHandlerInterface
      */
     public function write($sessionId, $data)
     {
-        return $this->saveHandlerAdapter->write($sessionId, $data);
+        return $this->callSafely('write', $sessionId, $data);
     }
 
     /**
-     * Destroy Session - remove data from resource for given session id
+     * Destroy Session - remove data from resource for given session id.
      *
      * @param string $sessionId
      * @return bool
      */
     public function destroy($sessionId)
     {
-        return $this->saveHandlerAdapter->destroy($sessionId);
+        return $this->callSafely('destroy', $sessionId);
     }
 
     /**
-     * Garbage Collection - remove old session data older
-     * than $maxLifetime (in seconds)
+     * Garbage Collection - remove old session data older than $maxLifetime (in seconds).
      *
      * @param int $maxLifetime
      * @return bool
@@ -126,35 +116,30 @@ class SaveHandler implements SaveHandlerInterface
      */
     public function gc($maxLifetime)
     {
-        return $this->saveHandlerAdapter->gc($maxLifetime);
+        return $this->callSafely('gc', $maxLifetime);
     }
 
     /**
-     * Get config
+     * Call save handler adapter method.
      *
-     * @return ConfigInterface
-     * @deprecated 100.0.8
-     */
-    private function getConfig()
-    {
-        if ($this->config === null) {
-            $this->config = ObjectManager::getInstance()->get(ConfigInterface::class);
-        }
-        return $this->config;
-    }
-
-    /**
-     * Set session.save_handler option
+     * In case custom handler failed, default files handler is used.
      *
-     * @param string $saveHandler
-     * @return $this
+     * @param string $method
+     * @param mixed $arguments
+     *
+     * @return mixed
      */
-    private function setSaveHandler($saveHandler)
+    private function callSafely(string $method, ...$arguments)
     {
-        if ($saveHandler === 'db' || $saveHandler === 'redis') {
-            $saveHandler = 'user';
+        try {
+            if ($this->saveHandlerAdapter === null) {
+                $saveMethod = $this->sessionConfig->getOption('session.save_handler') ?: $this->defaultHandler;
+                $this->saveHandlerAdapter = $this->saveHandlerFactory->create($saveMethod);
+            }
+            return $this->saveHandlerAdapter->{$method}(...$arguments);
+        } catch (SessionException $exception) {
+            $this->saveHandlerAdapter = $this->saveHandlerFactory->create($this->defaultHandler);
+            return $this->saveHandlerAdapter->{$method}(...$arguments);
         }
-        $this->getConfig()->setOption('session.save_handler', $saveHandler);
-        return $this;
     }
 }

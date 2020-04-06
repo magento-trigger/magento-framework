@@ -5,10 +5,15 @@
  */
 namespace Magento\Framework\Code\Generator;
 
+use Laminas\Code\Generator\ValueGenerator;
+
+/**
+ * Abstract entity
+ */
 abstract class EntityAbstract
 {
     /**
-     * Entity type
+     * Entity type abstract
      */
     const ENTITY_TYPE = 'abstract';
 
@@ -181,7 +186,6 @@ abstract class EntityAbstract
      */
     protected function _getClassProperties()
     {
-        // protected $_objectManager = null;
         $objectManager = [
             'name' => '_objectManager',
             'visibility' => 'protected',
@@ -236,6 +240,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Validate data
+     *
      * @return bool
      */
     protected function _validateData()
@@ -261,6 +267,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Get class DocBlock
+     *
      * @return array
      */
     protected function _getClassDocBlock()
@@ -270,6 +278,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Get generated code
+     *
      * @return string
      */
     protected function _getGeneratedCode()
@@ -279,6 +289,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Fix code style
+     *
      * @param string $sourceCode
      * @return string
      */
@@ -293,11 +305,67 @@ abstract class EntityAbstract
     /**
      * Get value generator for null default value
      *
-     * @return \Zend\Code\Generator\ValueGenerator
+     * @return ValueGenerator
      */
     protected function _getNullDefaultValue()
     {
-        $value = new \Zend\Code\Generator\ValueGenerator(null, \Zend\Code\Generator\ValueGenerator::TYPE_NULL);
+        $value = new ValueGenerator(null, ValueGenerator::TYPE_NULL);
+
+        return $value;
+    }
+
+    /**
+     * Extract parameter type
+     *
+     * @param \ReflectionParameter $parameter
+     * @return null|string
+     */
+    private function extractParameterType(
+        \ReflectionParameter $parameter
+    ): ?string {
+        /** @var string|null $typeName */
+        $typeName = null;
+        if ($parameter->hasType()) {
+            if ($parameter->isArray()) {
+                $typeName = 'array';
+            } elseif ($parameter->getClass()) {
+                $typeName = $this->_getFullyQualifiedClassName(
+                    $parameter->getClass()->getName()
+                );
+            } elseif ($parameter->isCallable()) {
+                $typeName = 'callable';
+            } else {
+                $typeName = $parameter->getType()->getName();
+            }
+
+            if ($parameter->allowsNull()) {
+                $typeName = '?' .$typeName;
+            }
+        }
+
+        return $typeName;
+    }
+
+    /**
+     * Extract parameter default value
+     *
+     * @param \ReflectionParameter $parameter
+     * @return null|ValueGenerator
+     * @throws \ReflectionException
+     */
+    private function extractParameterDefaultValue(
+        \ReflectionParameter $parameter
+    ): ?ValueGenerator {
+        /** @var ValueGenerator|null $value */
+        $value = null;
+        if ($parameter->isOptional() && $parameter->isDefaultValueAvailable()) {
+            $valueType = ValueGenerator::TYPE_AUTO;
+            $defaultValue = $parameter->getDefaultValue();
+            if ($defaultValue === null) {
+                $valueType = ValueGenerator::TYPE_NULL;
+            }
+            $value = new ValueGenerator($defaultValue, $valueType);
+        }
 
         return $value;
     }
@@ -307,33 +375,20 @@ abstract class EntityAbstract
      *
      * @param \ReflectionParameter $parameter
      * @return array
+     * @throws \ReflectionException
      */
     protected function _getMethodParameterInfo(\ReflectionParameter $parameter)
     {
         $parameterInfo = [
             'name' => $parameter->getName(),
             'passedByReference' => $parameter->isPassedByReference(),
-            'type' => $parameter->getType(),
             'variadic' => $parameter->isVariadic()
         ];
-
-        if ($parameter->isArray()) {
-            $parameterInfo['type'] = 'array';
-        } elseif ($parameter->getClass()) {
-            $parameterInfo['type'] = $this->_getFullyQualifiedClassName($parameter->getClass()->getName());
-        } elseif ($parameter->isCallable()) {
-            $parameterInfo['type'] = 'callable';
+        if ($type = $this->extractParameterType($parameter)) {
+            $parameterInfo['type'] = $type;
         }
-
-        if ($parameter->isOptional() && $parameter->isDefaultValueAvailable()) {
-            $defaultValue = $parameter->getDefaultValue();
-            if (is_string($defaultValue)) {
-                $parameterInfo['defaultValue'] = $parameter->getDefaultValue();
-            } elseif ($defaultValue === null) {
-                $parameterInfo['defaultValue'] = $this->_getNullDefaultValue();
-            } else {
-                $parameterInfo['defaultValue'] = $defaultValue;
-            }
+        if ($default = $this->extractParameterDefaultValue($parameter)) {
+            $parameterInfo['defaultValue'] = $default;
         }
 
         return $parameterInfo;

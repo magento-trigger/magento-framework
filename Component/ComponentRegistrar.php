@@ -8,8 +8,6 @@ namespace Magento\Framework\Component;
 /**
  * Provides ability to statically register components.
  *
- * @author Josh Di Fabio <joshdifabio@gmail.com>
- *
  * @api
  */
 class ComponentRegistrar implements ComponentRegistrarInterface
@@ -50,13 +48,12 @@ class ComponentRegistrar implements ComponentRegistrarInterface
                 ucfirst($type) . ' \'' . $componentName . '\' from \'' . $path . '\' '
                 . 'has been already defined in \'' . self::$paths[$type][$componentName] . '\'.'
             );
-        } else {
-            self::$paths[$type][$componentName] = str_replace('\\', '/', $path);
         }
+        self::$paths[$type][$componentName] = str_replace('\\', '/', $path);
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function getPaths($type)
     {
@@ -65,12 +62,12 @@ class ComponentRegistrar implements ComponentRegistrarInterface
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function getPath($type, $componentName)
     {
         self::validateType($type);
-        return isset(self::$paths[$type][$componentName]) ? self::$paths[$type][$componentName] : null;
+        return self::$paths[$type][$componentName] ?? null;
     }
 
     /**

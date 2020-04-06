@@ -6,7 +6,11 @@
 namespace Magento\Framework\Oauth\Helper;
 
 use Magento\Framework\App\RequestInterface;
+use Laminas\Uri\UriFactory;
 
+/**
+ * Request helper
+ */
 class Request
 {
     /**#@+
@@ -95,7 +99,7 @@ class Request
         }
         $protocolParamsNotSet = !$protocolParams;
 
-        $queryString = \Zend_Uri_Http::fromString($requestUrl)->getQuery();
+        $queryString = UriFactory::factory($requestUrl)->getQuery();
         $this->_extractQueryStringParams($protocolParams, $queryString);
 
         if ($protocolParamsNotSet) {
@@ -109,7 +113,7 @@ class Request
     /**
      * Retrieve protocol parameters from query string
      *
-     * @param array &$protocolParams
+     * @param array $protocolParams
      * @param array $queryString
      * @return void
      */
