@@ -4,20 +4,19 @@
  * See COPYING.txt for license details.
  */
 
+namespace Magento\Framework\Archive;
+
+use Magento\Framework\Archive\Helper\File;
+
 /**
  * Class to work with tar archives
  *
  * @author      Magento Core Team <core@magentocommerce.com>
  */
-namespace Magento\Framework\Archive;
-
-use Magento\Framework\Archive\Helper\File;
-use Magento\Framework\Filesystem\DriverInterface;
-
 class Tar extends \Magento\Framework\Archive\AbstractArchive implements \Magento\Framework\Archive\ArchiveInterface
 {
     /**
-     * Tar block size
+     * The value of the tar block size
      *
      * @const int
      */
@@ -86,8 +85,8 @@ class Tar extends \Magento\Framework\Archive\AbstractArchive implements \Magento
      */
     protected static function _getFormatParseHeader()
     {
-        return 'a100name/a8mode/a8uid/a8gid/a12size/a12mtime/a8checksum/a1type/a100symlink/a6magic/a2version/' .
-            'a32uname/a32gname/a8devmajor/a8devminor/a155prefix/a12closer';
+        return 'Z100name/Z8mode/Z8uid/Z8gid/Z12size/Z12mtime/Z8checksum/Z1type/Z100symlink/Z6magic/Z2version/' .
+            'Z32uname/Z32gname/Z8devmajor/Z8devminor/Z155prefix/Z12closer';
     }
 
     /**
@@ -252,7 +251,7 @@ class Tar extends \Magento\Framework\Archive\AbstractArchive implements \Magento
         $file = $this->_getCurrentFile();
 
         if (is_dir($file)) {
-            $dirFiles = scandir($file);
+            $dirFiles = scandir($file, SCANDIR_SORT_NONE);
 
             if (false === $dirFiles) {
                 throw new \Magento\Framework\Exception\LocalizedException(
@@ -260,10 +259,7 @@ class Tar extends \Magento\Framework\Archive\AbstractArchive implements \Magento
                 );
             }
 
-            array_shift($dirFiles);
-            /* remove  './'*/
-            array_shift($dirFiles);
-            /* remove  '../'*/
+            $dirFiles = array_diff($dirFiles, ['..', '.']);
 
             foreach ($dirFiles as $item) {
                 $this->_setCurrentFile($file . $item)->_createTar();

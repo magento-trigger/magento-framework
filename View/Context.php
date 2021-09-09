@@ -14,6 +14,7 @@ use Magento\Framework\App\State as AppState;
 use Magento\Framework\Event\ManagerInterface;
 use Psr\Log\LoggerInterface as Logger;
 use Magento\Framework\Session\SessionManager;
+use Magento\Framework\Session\SessionManagerInterface;
 use Magento\Framework\TranslateInterface;
 use Magento\Framework\UrlInterface;
 use Magento\Framework\View\ConfigInterface as ViewConfig;
@@ -26,7 +27,9 @@ use Magento\Framework\View\ConfigInterface as ViewConfig;
  *
  * @SuppressWarnings(PHPMD.TooManyFields)
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings(PHPMD.CookieAndSessionMisuse)
  * @api
+ * @since 100.0.2
  */
 class Context
 {
@@ -144,6 +147,7 @@ class Context
      * @param Logger $logger
      * @param AppState $appState
      * @param LayoutInterface $layout
+     * @param SessionManagerInterface|null $sessionManager
      *
      * @todo reduce parameter number
      *
@@ -163,7 +167,8 @@ class Context
         CacheState $cacheState,
         Logger $logger,
         AppState $appState,
-        LayoutInterface $layout
+        LayoutInterface $layout,
+        SessionManagerInterface $sessionManager = null
     ) {
         $this->request = $request;
         $this->eventManager = $eventManager;
@@ -171,7 +176,7 @@ class Context
         $this->translator = $translator;
         $this->cache = $cache;
         $this->design = $design;
-        $this->session = $session;
+        $this->session = $sessionManager ?: $session;
         $this->scopeConfig = $scopeConfig;
         $this->frontController = $frontController;
         $this->viewConfig      = $viewConfig;
@@ -332,6 +337,8 @@ class Context
     }
 
     /**
+     * Get Front Name
+     *
      * @see getModuleName
      */
     public function getFrontName()
@@ -377,7 +384,7 @@ class Context
     public function getAcceptType()
     {
         // TODO: do intelligence here
-        $type = $this->getHeader('Accept', 'html');
+        $type = $this->getHeader('Accept') ?: 'html';
         if (strpos($type, 'json') !== false) {
             return 'json';
         } elseif (strpos($type, 'soap') !== false) {
@@ -480,7 +487,9 @@ class Context
             $result = $result->getParentTheme();
         }
         if (!$result) {
-            throw new \Exception("Unable to find a physical ancestor for a theme '{$theme->getThemeTitle()}'.");
+            throw new \InvalidArgumentException(
+                "Unable to find a physical ancestor for a theme '{$theme->getThemeTitle()}'."
+            );
         }
         return $result;
     }

@@ -3,6 +3,8 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Framework\App\Test\Unit\Console;
 
 use Magento\Framework\App\Console\MaintenanceModeEnabler;
@@ -54,8 +56,7 @@ class MaintenanceModeEnablerTest extends TestCase
                 true
             );
         } catch (\Exception $e) {
-            $this->assertEquals(
-                true,
+            $this->assertTrue(
                 $maintenanceMode->isOn(),
                 'Maintenance mode is not active after failure'
             );
@@ -88,6 +89,9 @@ class MaintenanceModeEnablerTest extends TestCase
         }
     }
 
+    /**
+     * @return array
+     */
     public function initialAppStateProvider()
     {
         return [
@@ -96,6 +100,10 @@ class MaintenanceModeEnablerTest extends TestCase
         ];
     }
 
+    /**
+     * @param bool $isOn
+     * @return MaintenanceMode
+     */
     private function createMaintenanceMode(bool $isOn): MaintenanceMode
     {
         $maintenanceMode = $this->getMockBuilder(MaintenanceMode::class)
@@ -113,6 +121,9 @@ class MaintenanceModeEnablerTest extends TestCase
         return $maintenanceMode;
     }
 
+    /**
+     * @return OutputInterface
+     */
     private function createOutput(): OutputInterface
     {
         $output = $this->getMockBuilder(OutputInterface::class)

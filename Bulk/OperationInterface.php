@@ -8,17 +8,18 @@ namespace Magento\Framework\Bulk;
 /**
  * Interface OperationInterface
  * @api
- * @since 100.2.0
+ * @since 103.0.0
  */
-interface OperationInterface
+interface OperationInterface extends \Magento\Framework\Api\ExtensibleDataInterface
 {
     /**#@+
      * Constants for keys of data array. Identical to the name of the getter in snake case
      */
-    const ID = 'id';
+    const ID = 'operation_key';
     const BULK_ID = 'bulk_uuid';
     const TOPIC_NAME = 'topic_name';
     const SERIALIZED_DATA = 'serialized_data';
+    const RESULT_SERIALIZED_DATA = 'result_serialized_data';
     const STATUS = 'status';
     const RESULT_MESSAGE = 'result_message';
     const ERROR_CODE = 'error_code';
@@ -31,13 +32,14 @@ interface OperationInterface
     const STATUS_TYPE_RETRIABLY_FAILED = 2;
     const STATUS_TYPE_NOT_RETRIABLY_FAILED = 3;
     const STATUS_TYPE_OPEN = 4;
+    const STATUS_TYPE_REJECTED = 5;
     /**#@-*/
 
     /**
      * Operation id
      *
      * @return int
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getId();
 
@@ -46,7 +48,7 @@ interface OperationInterface
      *
      * @param int $id
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setId($id);
 
@@ -54,7 +56,7 @@ interface OperationInterface
      * Get bulk uuid
      *
      * @return string
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getBulkUuid();
 
@@ -63,7 +65,7 @@ interface OperationInterface
      *
      * @param string $bulkId
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setBulkUuid($bulkId);
 
@@ -71,7 +73,7 @@ interface OperationInterface
      * Message Queue Topic
      *
      * @return string
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getTopicName();
 
@@ -80,7 +82,7 @@ interface OperationInterface
      *
      * @param string $topic
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setTopicName($topic);
 
@@ -88,7 +90,7 @@ interface OperationInterface
      * Serialized Data
      *
      * @return string
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getSerializedData();
 
@@ -97,9 +99,26 @@ interface OperationInterface
      *
      * @param string $serializedData
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setSerializedData($serializedData);
+
+    /**
+     * Result serialized Data
+     *
+     * @return string
+     * @since 103.0.0
+     */
+    public function getResultSerializedData();
+
+    /**
+     * Set result serialized data
+     *
+     * @param string $resultSerializedData
+     * @return $this
+     * @since 103.0.0
+     */
+    public function setResultSerializedData($resultSerializedData);
 
     /**
      * Get operation status
@@ -107,7 +126,7 @@ interface OperationInterface
      * OPEN | COMPLETE | RETRIABLY_FAILED | NOT_RETRIABLY_FAILED
      *
      * @return int
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getStatus();
 
@@ -116,7 +135,7 @@ interface OperationInterface
      *
      * @param int $status
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setStatus($status);
 
@@ -124,7 +143,7 @@ interface OperationInterface
      * Get result message
      *
      * @return string
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getResultMessage();
 
@@ -133,7 +152,7 @@ interface OperationInterface
      *
      * @param string $resultMessage
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setResultMessage($resultMessage);
 
@@ -141,7 +160,7 @@ interface OperationInterface
      * Get error code
      *
      * @return int
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function getErrorCode();
 
@@ -150,7 +169,7 @@ interface OperationInterface
      *
      * @param int $errorCode
      * @return $this
-     * @since 100.2.0
+     * @since 103.0.0
      */
     public function setErrorCode($errorCode);
 }

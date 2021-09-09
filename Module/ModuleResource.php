@@ -11,7 +11,7 @@ use \Magento\Framework\Model\ResourceModel\Db\AbstractDb;
 /**
  * Resource Model
  *
- * @deprecated Declarative schema and data patches replace old functionality and setup_module table
+ * @deprecated 102.0.0 Declarative schema and data patches replace old functionality and setup_module table
  * So all resources related to this table, will be deprecated since 2.3.0
  */
 class ModuleResource extends AbstractDb implements ResourceInterface
@@ -87,7 +87,7 @@ class ModuleResource extends AbstractDb implements ResourceInterface
             return false;
         }
         $this->_loadVersion('db');
-        return isset(self::$schemaVersions[$moduleName]) ? self::$schemaVersions[$moduleName] : false;
+        return self::$schemaVersions[$moduleName] ?? false;
     }
 
     /**
@@ -119,7 +119,7 @@ class ModuleResource extends AbstractDb implements ResourceInterface
             return false;
         }
         $this->_loadVersion('data');
-        return isset(self::$dataVersions[$moduleName]) ? self::$dataVersions[$moduleName] : false;
+        return self::$dataVersions[$moduleName] ?? false;
     }
 
     /**
@@ -141,7 +141,7 @@ class ModuleResource extends AbstractDb implements ResourceInterface
     /**
      * Flush all class cache
      *
-     * @deprecated This method was added as temporary solution, to increase modularity:
+     * @deprecated 102.0.0 This method was added as temporary solution, to increase modularity:
      * Because before new modules appears in resource only on next bootstrap
      * @return void
      */

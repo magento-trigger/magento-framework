@@ -5,27 +5,33 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
 
 namespace Magento\Framework\Webapi;
 
-use Magento\Framework\Webapi\ServiceTypeToEntityTypeMap;
 use Magento\Framework\Api\AttributeValue;
 use Magento\Framework\Api\AttributeValueFactory;
+use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Api\SimpleDataObjectConverter;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\InputException;
 use Magento\Framework\Exception\SerializationException;
+use Magento\Framework\ObjectManager\ConfigInterface;
 use Magento\Framework\ObjectManagerInterface;
 use Magento\Framework\Phrase;
 use Magento\Framework\Reflection\MethodsMap;
 use Magento\Framework\Reflection\TypeProcessor;
 use Magento\Framework\Webapi\Exception as WebapiException;
-use Zend\Code\Reflection\ClassReflection;
+use Magento\Framework\Webapi\CustomAttribute\PreprocessorInterface;
+use Laminas\Code\Reflection\ClassReflection;
+use Magento\Framework\Webapi\Validator\ServiceInputValidatorInterface;
 
 /**
  * Deserialize arguments from API requests.
  *
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  * @api
+ * @since 100.0.2
  */
 class ServiceInputProcessor implements ServicePayloadConverterInterface
 {
@@ -67,6 +73,31 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
     private $serviceTypeToEntityTypeMap;
 
     /**
+     * @var ConfigInterface
+     */
+    private $config;
+
+    /**
+     * @var PreprocessorInterface[]
+     */
+    private $customAttributePreprocessors;
+
+    /**
+     * @var array
+     */
+    private $attributesPreprocessorsMap = [];
+
+    /**
+     * @var ServiceInputValidatorInterface
+     */
+    private $serviceInputValidator;
+
+    /**
+     * @var int
+     */
+    private $defaultPageSize;
+
+    /**
      * Initialize dependencies.
      *
      * @param TypeProcessor $typeProcessor
@@ -74,7 +105,11 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
      * @param AttributeValueFactory $attributeValueFactory
      * @param CustomAttributeTypeLocatorInterface $customAttributeTypeLocator
      * @param MethodsMap $methodsMap
-     * @param ServiceTypeToEntityTypeMap $serviceTypeToEntityTypeMap
+     * @param ServiceTypeToEntityTypeMap|null $serviceTypeToEntityTypeMap
+     * @param ConfigInterface|null $config
+     * @param array $customAttributePreprocessors
+     * @param ServiceInputValidatorInterface|null $serviceInputValidator
+     * @param int $defaultPageSize
      */
     public function __construct(
         TypeProcessor $typeProcessor,
@@ -82,7 +117,11 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
         AttributeValueFactory $attributeValueFactory,
         CustomAttributeTypeLocatorInterface $customAttributeTypeLocator,
         MethodsMap $methodsMap,
-        ServiceTypeToEntityTypeMap $serviceTypeToEntityTypeMap = null
+        ServiceTypeToEntityTypeMap $serviceTypeToEntityTypeMap = null,
+        ConfigInterface $config = null,
+        array $customAttributePreprocessors = [],
+        ServiceInputValidatorInterface $serviceInputValidator = null,
+        int $defaultPageSize = 20
     ) {
         $this->typeProcessor = $typeProcessor;
         $this->objectManager = $objectManager;
@@ -90,7 +129,13 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
         $this->customAttributeTypeLocator = $customAttributeTypeLocator;
         $this->methodsMap = $methodsMap;
         $this->serviceTypeToEntityTypeMap = $serviceTypeToEntityTypeMap
-            ?: \Magento\Framework\App\ObjectManager::getInstance()->get(ServiceTypeToEntityTypeMap::class);
+            ?: ObjectManager::getInstance()->get(ServiceTypeToEntityTypeMap::class);
+        $this->config = $config
+            ?: ObjectManager::getInstance()->get(ConfigInterface::class);
+        $this->customAttributePreprocessors = $customAttributePreprocessors;
+        $this->serviceInputValidator = $serviceInputValidator
+            ?: ObjectManager::getInstance()->get(ServiceInputValidatorInterface::class);
+        $this->defaultPageSize = $defaultPageSize >= 10 ? $defaultPageSize : 10;
     }
 
     /**
@@ -103,7 +148,7 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
     private function getNameFinder()
     {
         if ($this->nameFinder === null) {
-            $this->nameFinder = \Magento\Framework\App\ObjectManager::getInstance()
+            $this->nameFinder = ObjectManager::getInstance()
                 ->get(\Magento\Framework\Reflection\NameFinder::class);
         }
         return $this->nameFinder;
@@ -122,7 +167,6 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
      * @param string $serviceMethodName name of the method that we are trying to call
      * @param array $inputArray data to send to method in key-value format
      * @return array list of parameters that can be used to call the service method
-     * @throws InputException if no value is provided for required parameters
      * @throws WebapiException
      */
     public function process($serviceClassName, $serviceMethodName, array $inputArray)
@@ -155,6 +199,49 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
     }
 
     /**
+     * Retrieve constructor data
+     *
+     * @param string $className
+     * @param array $data
+     * @return array
+     * @throws \ReflectionException
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    private function getConstructorData(string $className, array $data): array
+    {
+        $preferenceClass = $this->config->getPreference($className);
+        $class = new ClassReflection($preferenceClass ?: $className);
+
+        try {
+            $constructor = $class->getMethod('__construct');
+        } catch (\ReflectionException $e) {
+            $constructor = null;
+        }
+
+        if ($constructor === null) {
+            return [];
+        }
+
+        $res = [];
+        $parameters = $constructor->getParameters();
+        foreach ($parameters as $parameter) {
+            if (isset($data[$parameter->getName()])) {
+                $parameterType = $this->typeProcessor->getParamType($parameter);
+
+                try {
+                    $res[$parameter->getName()] = $this->convertValue($data[$parameter->getName()], $parameterType);
+                } catch (\ReflectionException $e) {
+                    // Parameter was not correclty declared or the class is uknown.
+                    // By not returing the contructor value, we will automatically fall back to the "setters" way.
+                    continue;
+                }
+            }
+        }
+
+        return $res;
+    }
+
+    /**
      * Creates a new instance of the given class and populates it with the array of data. The data can
      * be in different forms depending on the adapter being used, REST vs. SOAP. For REST, the data is
      * in snake_case (e.g. tax_class_id) while for SOAP the data is in camelCase (e.g. taxClassId).
@@ -163,6 +250,8 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
      * @param array $data
      * @return object the newly created and populated object
      * @throws \Exception
+     * @throws SerializationException
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      */
     protected function _createFromArray($className, $data)
     {
@@ -174,9 +263,17 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
         if (is_subclass_of($className, self::EXTENSION_ATTRIBUTES_TYPE)) {
             $className = substr($className, 0, -strlen('Interface'));
         }
-        $object = $this->objectManager->create($className);
 
+        // Primary method: assign to constructor parameters
+        $constructorArgs = $this->getConstructorData($className, $data);
+        $object = $this->objectManager->create($className, $constructorArgs);
+
+        // Secondary method: fallback to setter methods
         foreach ($data as $propertyName => $value) {
+            if (isset($constructorArgs[$propertyName])) {
+                continue;
+            }
+
             // Converts snake_case to uppercase CamelCase to help form getter/setter method names
             // This use case is for REST only. SOAP request data is already camel cased
             $camelCaseProperty = SimpleDataObjectConverter::snakeCaseToUpperCamelCase($propertyName);
@@ -207,9 +304,17 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
                         )
                     );
                 }
+                $this->serviceInputValidator->validateEntityValue($object, $propertyName, $setterValue);
                 $object->{$setterName}($setterValue);
             }
         }
+
+        if ($object instanceof SearchCriteriaInterface
+            && $object->getPageSize() === null
+        ) {
+            $object->setPageSize($this->defaultPageSize);
+        }
+
         return $object;
     }
 
@@ -227,12 +332,11 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
         $dataObjectClassName = ltrim($dataObjectClassName, '\\');
 
         foreach ($customAttributesValueArray as $key => $customAttribute) {
+            $this->runCustomAttributePreprocessors($key, $customAttribute);
             if (!is_array($customAttribute)) {
                 $customAttribute = [AttributeValue::ATTRIBUTE_CODE => $key, AttributeValue::VALUE => $customAttribute];
             }
-
             list($customAttributeCode, $customAttributeValue) = $this->processCustomAttribute($customAttribute);
-
             $entityType = $this->serviceTypeToEntityTypeMap->getEntityType($dataObjectClassName);
             if ($entityType) {
                 $type = $this->customAttributeTypeLocator->getType(
@@ -270,10 +374,48 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
     }
 
     /**
+     * Get map of preprocessors related to the custom attributes
+     *
+     * @return array
+     */
+    private function getAttributesPreprocessorsMap(): array
+    {
+        if (!$this->attributesPreprocessorsMap) {
+            foreach ($this->customAttributePreprocessors as $attributePreprocessor) {
+                foreach ($attributePreprocessor->getAffectedAttributes() as $attributeKey) {
+                    $this->attributesPreprocessorsMap[$attributeKey][] = $attributePreprocessor;
+                }
+            }
+        }
+
+        return $this->attributesPreprocessorsMap;
+    }
+
+    /**
+     * Prepare attribute value by loaded attribute preprocessors
+     *
+     * @param mixed $key
+     * @param mixed $customAttribute
+     */
+    private function runCustomAttributePreprocessors($key, &$customAttribute)
+    {
+        $preprocessorsMap = $this->getAttributesPreprocessorsMap();
+        if ($key && is_array($customAttribute) && array_key_exists($key, $preprocessorsMap)) {
+            $preprocessorsList = $preprocessorsMap[$key];
+            foreach ($preprocessorsList as $attributePreprocessor) {
+                if ($attributePreprocessor->shouldBeProcessed($key, $customAttribute)) {
+                    $attributePreprocessor->process($key, $customAttribute);
+                }
+            }
+        }
+    }
+
+    /**
      * Derive the custom attribute code and value.
      *
      * @param string[] $customAttribute
      * @return string[]
+     * @throws SerializationException
      */
     private function processCustomAttribute($customAttribute)
     {
@@ -356,6 +498,7 @@ class ServiceInputProcessor implements ServicePayloadConverterInterface
                 $result = is_array($data) ? [] : null;
                 $itemType = $this->typeProcessor->getArrayItemType($type);
                 if (is_array($data)) {
+                    $this->serviceInputValidator->validateComplexArrayType($itemType, $data);
                     foreach ($data as $key => $item) {
                         $result[$key] = $this->_createFromArray($itemType, $item);
                     }

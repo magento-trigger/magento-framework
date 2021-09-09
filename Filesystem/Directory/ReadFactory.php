@@ -7,6 +7,9 @@ namespace Magento\Framework\Filesystem\Directory;
 
 use Magento\Framework\Filesystem\DriverPool;
 
+/**
+ * The factory of the filesystem directory instances for read operations.
+ */
 class ReadFactory
 {
     /**
@@ -36,7 +39,15 @@ class ReadFactory
     public function create($path, $driverCode = DriverPool::FILE)
     {
         $driver = $this->driverPool->getDriver($driverCode);
-        $factory = new \Magento\Framework\Filesystem\File\ReadFactory($this->driverPool);
-        return new Read($factory, $driver, $path);
+        $factory = new \Magento\Framework\Filesystem\File\ReadFactory(
+            $this->driverPool
+        );
+
+        return new Read(
+            $factory,
+            $driver,
+            $path,
+            new PathValidator($driver)
+        );
     }
 }

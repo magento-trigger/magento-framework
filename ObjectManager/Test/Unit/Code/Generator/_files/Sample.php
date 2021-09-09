@@ -3,6 +3,7 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
 
 namespace Magento\Framework\ObjectManager\Code\Generator;
 
@@ -15,6 +16,11 @@ class Sample
      * @var array
      */
     protected $messages = [];
+
+    /**
+     * @var array
+     */
+    private $config = [];
 
     /**
      * @param array $messages
@@ -30,5 +36,21 @@ class Sample
     public function getMessages()
     {
         return $this->messages;
+    }
+
+    /**
+     * @param array $config
+     */
+    public function setConfig(array $config)
+    {
+        $this->config = $config;
+    }
+
+    /**
+     * @return array
+     */
+    public function getConfig(): array
+    {
+        return $this->config;
     }
 }

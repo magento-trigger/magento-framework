@@ -3,12 +3,9 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
-namespace Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor;
+declare(strict_types=1);
 
-use Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\AssociativeArray;
-use Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\DataArray;
-use Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\Nested;
-use Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\SimpleArray;
+namespace Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor;
 
 class TestService
 {
@@ -26,10 +23,28 @@ class TestService
     }
 
     /**
+     * @param \Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\SimpleConstructor $simpleConstructor
+     * @return \Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\SimpleConstructor
+     */
+    public function simpleConstructor(SimpleConstructor $simpleConstructor)
+    {
+        return $simpleConstructor;
+    }
+
+    /**
      * @param int $entityId
      * @return string[]
      */
     public function simpleDefaultValue($entityId = self::DEFAULT_VALUE)
+    {
+        return [$entityId];
+    }
+
+    /**
+     * @param int $entityId
+     * @return string[]
+     */
+    public function constructorArguments($entityId = self::DEFAULT_VALUE)
     {
         return [$entityId];
     }
@@ -102,7 +117,7 @@ class TestService
      * @return \Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\ObjectWithCustomAttributes
      */
     public function objectWithCustomAttributesMethod(
-        \Magento\Framework\Webapi\Test\Unit\ServiceInputProcessor\ObjectWithCustomAttributes $param
+        ObjectWithCustomAttributes $param
     ) {
         return $param;
     }

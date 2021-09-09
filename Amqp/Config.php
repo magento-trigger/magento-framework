@@ -5,16 +5,18 @@
  */
 namespace Magento\Framework\Amqp;
 
+use Magento\Framework\Amqp\Connection\FactoryOptions;
 use Magento\Framework\App\DeploymentConfig;
-use PhpAmqpLib\Connection\AMQPStreamConnection;
+use Magento\Framework\App\ObjectManager;
+use PhpAmqpLib\Connection\AbstractConnection;
 use PhpAmqpLib\Channel\AMQPChannel;
-use PhpAmqpLib\Connection\AMQPSSLConnection;
+use Magento\Framework\Amqp\Connection\Factory as ConnectionFactory;
 
 /**
  * Reads the Amqp config in the deployed environment configuration
  *
  * @api
- * @since 100.0.0
+ * @since 103.0.0
  */
 class Config
 {
@@ -44,7 +46,7 @@ class Config
     private $deploymentConfig;
 
     /**
-     * @var AMQPStreamConnection
+     * @var AbstractConnection
      */
     private $connection;
 
@@ -68,6 +70,11 @@ class Config
     private $connectionName;
 
     /**
+     * @var ConnectionFactory
+     */
+    private $connectionFactory;
+
+    /**
      * Initialize dependencies.
      *
      * Example environment config:
@@ -88,19 +95,24 @@ class Config
      *
      * @param DeploymentConfig $config
      * @param string $connectionName
-     * @since 100.0.0
+     * @param ConnectionFactory|null $connectionFactory
      */
-    public function __construct(DeploymentConfig $config, $connectionName = 'amqp')
-    {
+    public function __construct(
+        DeploymentConfig $config,
+        $connectionName = 'amqp',
+        ConnectionFactory $connectionFactory = null
+    ) {
         $this->deploymentConfig = $config;
         $this->connectionName = $connectionName;
+        $this->connectionFactory = $connectionFactory
+            ?: ObjectManager::getInstance()->get(ConnectionFactory::class);
     }
 
     /**
      * Destructor
      *
      * @return void
-     * @since 100.0.0
+     * @since 103.0.0
      */
     public function __destruct()
     {
@@ -113,12 +125,35 @@ class Config
      * @param string $key
      * @return string
      * @throws \LogicException
-     * @since 100.0.0
+     * @since 103.0.0
      */
     public function getValue($key)
     {
         $this->load();
-        return isset($this->data[$key]) ? $this->data[$key] : null;
+        return $this->data[$key] ?? null;
+    }
+
+    /**
+     * Create amqp connection
+     *
+     * @return AbstractConnection
+     */
+    private function createConnection(): AbstractConnection
+    {
+        $sslEnabled = trim($this->getValue(self::SSL)) === 'true';
+        $options = new FactoryOptions();
+        $options->setHost($this->getValue(self::HOST));
+        $options->setPort($this->getValue(self::PORT));
+        $options->setUsername($this->getValue(self::USERNAME));
+        $options->setPassword($this->getValue(self::PASSWORD));
+        $options->setVirtualHost($this->getValue(self::VIRTUALHOST));
+        $options->setSslEnabled($sslEnabled);
+        /** @var array $sslOptions */
+        if ($sslOptions = $this->getValue(self::SSL_OPTIONS)) {
+            $options->setSslOptions($sslOptions);
+        }
+
+        return $this->connectionFactory->create($options);
     }
 
     /**
@@ -126,13 +161,12 @@ class Config
      *
      * @return AMQPChannel
      * @throws \LogicException
-     * @since 100.0.0
+     * @since 103.0.0
      */
     public function getChannel()
     {
         if (!isset($this->connection) || !isset($this->channel)) {
-            $this->connection = $this->getValue(self::SSL) ? $this->createSecureConnection() :
-                $this->createUnsecureConnection();
+            $this->connection = $this->createConnection();
 
             $this->channel = $this->connection->channel();
         }
@@ -178,44 +212,5 @@ class Config
             $this->connection->close();
             unset($this->connection);
         }
-    }
-
-    /**
-     * @return AMQPStreamConnection
-     */
-    private function createUnsecureConnection()
-    {
-        return new AMQPStreamConnection(
-            $this->getValue(self::HOST),
-            $this->getValue(self::PORT),
-            $this->getValue(self::USERNAME),
-            $this->getValue(self::PASSWORD),
-            $this->getValue(self::VIRTUALHOST)
-        );
-    }
-
-    /**
-     * Create secure connection to AMQP server.
-     *
-     * Note: when you are passing empty array of SSL options PHP-AMQPLIB will actually create unsecure connection.
-     *
-     * @return AMQPSSLConnection
-     */
-    private function createSecureConnection()
-    {
-        $sslOptions = $this->getValue(self::SSL_OPTIONS);
-
-        if (empty($sslOptions)) {
-            $sslOptions = ['verify_peer' => true];
-        }
-
-        return new AMQPSSLConnection(
-            $this->getValue(self::HOST),
-            $this->getValue(self::PORT),
-            $this->getValue(self::USERNAME),
-            $this->getValue(self::PASSWORD),
-            $this->getValue(self::VIRTUALHOST),
-            $sslOptions
-        );
     }
 }

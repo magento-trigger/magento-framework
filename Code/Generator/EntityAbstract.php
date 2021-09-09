@@ -5,10 +5,18 @@
  */
 namespace Magento\Framework\Code\Generator;
 
+use Laminas\Code\Generator\ValueGenerator;
+use ReflectionClass;
+use ReflectionException;
+use ReflectionParameter;
+
+/**
+ * Abstract entity
+ */
 abstract class EntityAbstract
 {
     /**
-     * Entity type
+     * Entity type abstract
      */
     const ENTITY_TYPE = 'abstract';
 
@@ -181,7 +189,6 @@ abstract class EntityAbstract
      */
     protected function _getClassProperties()
     {
-        // protected $_objectManager = null;
         $objectManager = [
             'name' => '_objectManager',
             'visibility' => 'protected',
@@ -236,6 +243,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Validate data
+     *
      * @return bool
      */
     protected function _validateData()
@@ -248,9 +257,9 @@ abstract class EntityAbstract
             $this->_addError('Source class ' . $sourceClassName . ' doesn\'t exist.');
             return false;
         } elseif (/**
-             * If makeResultFileDirectory only fails because the file is already created,
-             * a competing process has generated the file, no exception should be thrown.
-             */
+         * If makeResultFileDirectory only fails because the file is already created,
+         * a competing process has generated the file, no exception should be thrown.
+         */
             !$this->_ioObject->makeResultFileDirectory($resultClassName)
             && !$this->_ioObject->fileExists($resultDir)
         ) {
@@ -261,6 +270,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Get class DocBlock
+     *
      * @return array
      */
     protected function _getClassDocBlock()
@@ -270,6 +281,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Get generated code
+     *
      * @return string
      */
     protected function _getGeneratedCode()
@@ -279,6 +292,8 @@ abstract class EntityAbstract
     }
 
     /**
+     * Fix code style
+     *
      * @param string $sourceCode
      * @return string
      */
@@ -293,11 +308,84 @@ abstract class EntityAbstract
     /**
      * Get value generator for null default value
      *
-     * @return \Zend\Code\Generator\ValueGenerator
+     * @return ValueGenerator
      */
     protected function _getNullDefaultValue()
     {
-        $value = new \Zend\Code\Generator\ValueGenerator(null, \Zend\Code\Generator\ValueGenerator::TYPE_NULL);
+        $value = new ValueGenerator(null, ValueGenerator::TYPE_NULL);
+
+        return $value;
+    }
+
+    /**
+     * Extract parameter type
+     *
+     * @param \ReflectionParameter $parameter
+     * @return null|string
+     */
+    private function extractParameterType(
+        \ReflectionParameter $parameter
+    ): ?string {
+        if (!$parameter->hasType()) {
+            return null;
+        }
+
+        /** @var string|null $typeName */
+        $typeName = null;
+        $parameterType = $parameter->getType();
+        if ($parameterType->getName() === 'array') {
+            $typeName = 'array';
+        } elseif ($parameterClass = $this->getParameterClass($parameter)) {
+            $typeName = $this->_getFullyQualifiedClassName($parameterClass->getName());
+        } elseif ($parameterType->getName() === 'callable') {
+            $typeName = 'callable';
+        } else {
+            $typeName = $parameterType->getName();
+        }
+
+        if ($parameter->allowsNull()) {
+            $typeName = '?' . $typeName;
+        }
+
+        return $typeName;
+    }
+
+    /**
+     * Get class by reflection parameter
+     *
+     * @param ReflectionParameter $reflectionParameter
+     * @return ReflectionClass|null
+     * @throws ReflectionException
+     */
+    private function getParameterClass(ReflectionParameter $reflectionParameter): ?ReflectionClass
+    {
+        $parameterType = $reflectionParameter->getType();
+
+        return $parameterType && !$parameterType->isBuiltin()
+            ? new ReflectionClass($parameterType->getName())
+            : null;
+    }
+
+    /**
+     * Extract parameter default value
+     *
+     * @param \ReflectionParameter $parameter
+     * @return null|ValueGenerator
+     * @throws \ReflectionException
+     */
+    private function extractParameterDefaultValue(
+        \ReflectionParameter $parameter
+    ): ?ValueGenerator {
+        /** @var ValueGenerator|null $value */
+        $value = null;
+        if ($parameter->isOptional() && $parameter->isDefaultValueAvailable()) {
+            $valueType = ValueGenerator::TYPE_AUTO;
+            $defaultValue = $parameter->getDefaultValue();
+            if ($defaultValue === null) {
+                $valueType = ValueGenerator::TYPE_NULL;
+            }
+            $value = new ValueGenerator($defaultValue, $valueType);
+        }
 
         return $value;
     }
@@ -307,33 +395,23 @@ abstract class EntityAbstract
      *
      * @param \ReflectionParameter $parameter
      * @return array
+     * @throws \ReflectionException
      */
     protected function _getMethodParameterInfo(\ReflectionParameter $parameter)
     {
         $parameterInfo = [
             'name' => $parameter->getName(),
-            'passedByReference' => $parameter->isPassedByReference(),
-            'type' => $parameter->getType(),
-            'variadic' => $parameter->isVariadic()
+            'passedByReference' => $parameter->isPassedByReference()
         ];
-
-        if ($parameter->isArray()) {
-            $parameterInfo['type'] = 'array';
-        } elseif ($parameter->getClass()) {
-            $parameterInfo['type'] = $this->_getFullyQualifiedClassName($parameter->getClass()->getName());
-        } elseif ($parameter->isCallable()) {
-            $parameterInfo['type'] = 'callable';
+        if ($parameter->isVariadic()) {
+            $parameterInfo['variadic'] = $parameter->isVariadic();
         }
 
-        if ($parameter->isOptional() && $parameter->isDefaultValueAvailable()) {
-            $defaultValue = $parameter->getDefaultValue();
-            if (is_string($defaultValue)) {
-                $parameterInfo['defaultValue'] = $parameter->getDefaultValue();
-            } elseif ($defaultValue === null) {
-                $parameterInfo['defaultValue'] = $this->_getNullDefaultValue();
-            } else {
-                $parameterInfo['defaultValue'] = $defaultValue;
-            }
+        if ($type = $this->extractParameterType($parameter)) {
+            $parameterInfo['type'] = $type;
+        }
+        if ($default = $this->extractParameterDefaultValue($parameter)) {
+            $parameterInfo['defaultValue'] = $default;
         }
 
         return $parameterInfo;

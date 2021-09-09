@@ -68,7 +68,7 @@ class PatchRegistry implements \IteratorAggregate
     /**
      * Register all dependents to patch
      *
-     * @param string | DependentPatchInterface $patchName
+     * @param string|DependentPatchInterface $patchName
      */
     private function registerDependents(string $patchName)
     {
@@ -97,9 +97,8 @@ class PatchRegistry implements \IteratorAggregate
             return $this->patches[$patchName];
         }
 
-        $patch = $patchName;
-        $this->patches[$patchName] = $patch;
-        return $patch;
+        $this->patches[$patchName] = $patchName;
+        return $patchName;
     }
 
     /**
@@ -131,6 +130,8 @@ class PatchRegistry implements \IteratorAggregate
     }
 
     /**
+     * Get patch dependencies.
+     *
      * @param string $patch
      * @return string[]
      */
@@ -147,7 +148,7 @@ class PatchRegistry implements \IteratorAggregate
 
             $depInstance = $this->registerPatch($dep);
             /**
-             * If a patch already have applied dependency - than we definently know
+             * If a patch already have applied dependency - then we definitely know
              * that all other dependencies in dependency chain are applied too, so we can skip this dep
              */
             if (!$depInstance) {
@@ -190,7 +191,7 @@ class PatchRegistry implements \IteratorAggregate
     /**
      * Retrieve iterator of all patch instances
      *
-     * If patch have dependencies, than first of all dependencies should be installed and only then desired patch
+     * If patch have dependencies, then first of all dependencies should be installed and only then desired patch
      *
      * @return \ArrayIterator
      */

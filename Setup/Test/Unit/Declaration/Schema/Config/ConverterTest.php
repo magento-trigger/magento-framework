@@ -3,17 +3,19 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Framework\Setup\Test\Unit\Declaration\Schema\Config;
 
-use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
 use Magento\Framework\Setup\Declaration\Schema\Config\Converter;
+use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
+use PHPUnit\Framework\TestCase;
 
 /**
  * Test for Converter class.
  *
- * @package Magento\Framework\Setup\Test\Unit\Declaration\Schema\Config.
  */
-class ConverterTest extends \PHPUnit\Framework\TestCase
+class ConverterTest extends TestCase
 {
     /**
      * @var Converter
@@ -25,7 +27,7 @@ class ConverterTest extends \PHPUnit\Framework\TestCase
      */
     private $objectManager;
 
-    protected function setUp()
+    protected function setUp(): void
     {
         $this->objectManager = new ObjectManager($this);
         $this->converter = $this->objectManager->getObject(
@@ -41,12 +43,12 @@ class ConverterTest extends \PHPUnit\Framework\TestCase
         $dom = new \DOMDocument();
         $dom->loadXML(
             '<?xml version="1.0"?>
-            <schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+            <schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                 xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
                 <table name="test_table" resource="default">
                     <column xsi:type="int" name="id" nullable="false" identity="true" comment="Id"/>
                     <column xsi:type="varchar" name="data" length="100" identity="false" comment="Data"/>
-                    <constraint xsi:type="primary" name="PRIMARY">
+                    <constraint xsi:type="primary" referenceId="PRIMARY_INDEX">
                         <column name="id"/>
                     </constraint>
                 </table>
@@ -74,12 +76,12 @@ class ConverterTest extends \PHPUnit\Framework\TestCase
                             ],
                         ],
                         'constraint' => [
-                            'PRIMARY' => [
+                            'PRIMARY_INDEX' => [
                                 'column' => [
                                     'id' => 'id',
                                 ],
                                 'type' => 'primary',
-                                'name' => 'PRIMARY',
+                                'referenceId' => 'PRIMARY_INDEX',
                             ],
                         ],
                         'name' => 'test_table',

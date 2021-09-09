@@ -3,17 +3,21 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Framework\Test\Unit\Module\Plugin;
 
-use Magento\Framework\Module\Plugin\DbStatusValidator as DbStatusValidatorPlugin;
-use Magento\Framework\TestFramework\Unit\Helper\ObjectManager as ObjectManagerHelper;
-use Magento\Framework\Cache\FrontendInterface as FrontendCacheInterface;
-use Magento\Framework\Module\DbVersionInfo;
 use Magento\Framework\App\FrontController;
 use Magento\Framework\App\RequestInterface;
+use Magento\Framework\Cache\FrontendInterface as FrontendCacheInterface;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Module\DbVersionInfo;
+use Magento\Framework\Module\Plugin\DbStatusValidator as DbStatusValidatorPlugin;
+use Magento\Framework\TestFramework\Unit\Helper\ObjectManager as ObjectManagerHelper;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
 
-class DbStatusValidatorTest extends \PHPUnit\Framework\TestCase
+class DbStatusValidatorTest extends TestCase
 {
     /**
      * @var DbStatusValidatorPlugin
@@ -26,26 +30,26 @@ class DbStatusValidatorTest extends \PHPUnit\Framework\TestCase
     private $objectManagerHelper;
 
     /**
-     * @var FrontendCacheInterface|\PHPUnit_Framework_MockObject_MockObject
+     * @var FrontendCacheInterface|MockObject
      */
     private $cacheMock;
 
     /**
-     * @var DbVersionInfo|\PHPUnit_Framework_MockObject_MockObject
+     * @var DbVersionInfo|MockObject
      */
     private $dbVersionInfoMock;
 
     /**
-     * @var FrontController|\PHPUnit_Framework_MockObject_MockObject
+     * @var FrontController|MockObject
      */
     private $frontControllerMock;
 
     /**
-     * @var RequestInterface|\PHPUnit_Framework_MockObject_MockObject
+     * @var RequestInterface|MockObject
      */
     private $requestMock;
 
-    protected function setUp()
+    protected function setUp(): void
     {
         $this->cacheMock = $this->getMockBuilder(FrontendCacheInterface::class)
             ->getMockForAbstractClass();
@@ -114,11 +118,14 @@ class DbStatusValidatorTest extends \PHPUnit\Framework\TestCase
         $this->cacheMock->expects(static::never())
             ->method('save');
 
-        $this->expectException(LocalizedException::class, $expectedMessage);
+        $this->expectException(LocalizedException::class);
         $this->expectExceptionMessage($expectedMessage);
         $this->plugin->beforeDispatch($this->frontControllerMock, $this->requestMock);
     }
 
+    /**
+     * @return array
+     */
     public static function beforeDispatchOutOfDateWithErrorsDataProvider()
     {
         return [
@@ -154,29 +161,29 @@ class DbStatusValidatorTest extends \PHPUnit\Framework\TestCase
                     [
                         DbVersionInfo::KEY_MODULE => 'Magento_Module4',
                         DbVersionInfo::KEY_TYPE => 'data',
-                        DbVersionInfo::KEY_CURRENT => '1.0.1',
-                        DbVersionInfo::KEY_REQUIRED => '1.0.0'
+                        DbVersionInfo::KEY_CURRENT => '1.0.10',
+                        DbVersionInfo::KEY_REQUIRED => '1.0.9'
                     ],
                 ],
                 'expectedMessage' => "Please update your modules: "
                     . "Run \"composer install\" from the Magento root directory.\n"
                     . "The following modules are outdated:\n"
                     . "Magento_Module3 schema: code version - 1.0.0, database version - 2.0.0\n"
-                    . "Magento_Module4 data: code version - 1.0.0, database version - 1.0.1",
+                    . "Magento_Module4 data: code version - 1.0.9, database version - 1.0.10",
             ],
             'some versions too high, some too low' => [
                 'errors' => [
+                    [
+                        DbVersionInfo::KEY_MODULE => 'Magento_Module2',
+                        DbVersionInfo::KEY_TYPE => 'schema',
+                        DbVersionInfo::KEY_CURRENT => '1.9.0',
+                        DbVersionInfo::KEY_REQUIRED => '1.12.0'
+                    ],
                     [
                         DbVersionInfo::KEY_MODULE => 'Magento_Module1',
                         DbVersionInfo::KEY_TYPE => 'schema',
                         DbVersionInfo::KEY_CURRENT => '2.0.0',
                         DbVersionInfo::KEY_REQUIRED => '1.0.0'
-                    ],
-                    [
-                        DbVersionInfo::KEY_MODULE => 'Magento_Module2',
-                        DbVersionInfo::KEY_TYPE => 'schema',
-                        DbVersionInfo::KEY_CURRENT => '1.0.0',
-                        DbVersionInfo::KEY_REQUIRED => '2.0.0'
                     ],
                 ],
                 'expectedMessage' => "Please update your modules: "

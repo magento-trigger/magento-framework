@@ -4,29 +4,38 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Framework\Acl\Test\Unit\Role;
 
-use \Magento\Framework\Acl\Role\Registry;
+use Magento\Framework\Acl\Role\Registry;
+use PHPUnit\Framework\TestCase;
 
-class RegistryTest extends \PHPUnit\Framework\TestCase
+class RegistryTest extends TestCase
 {
     /**
      * @var Registry
      */
     protected $model;
 
-    protected function setUp()
+    protected function setUp(): void
     {
         $this->model = new Registry();
     }
 
+    /**
+     * @param $roleId
+     * @param $parentRoleId
+     * @return array
+     * @throws \Zend_Acl_Role_Registry_Exception
+     */
     protected function initRoles($roleId, $parentRoleId)
     {
         $parentRole = $this->createMock(\Zend_Acl_Role_Interface::class);
-        $parentRole->expects($this->any())->method('getRoleId')->will($this->returnValue($parentRoleId));
+        $parentRole->expects($this->any())->method('getRoleId')->willReturn($parentRoleId);
 
         $role = $this->createMock(\Zend_Acl_Role_Interface::class);
-        $role->expects($this->any())->method('getRoleId')->will($this->returnValue($roleId));
+        $role->expects($this->any())->method('getRoleId')->willReturn($roleId);
 
         $this->model->add($role);
         $this->model->add($parentRole);
@@ -57,12 +66,10 @@ class RegistryTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals([$parentRoleId => $parentRole], $this->model->getParents($roleId));
     }
 
-    /**
-     * @expectedException \Zend_Acl_Role_Registry_Exception
-     * @expectedExceptionMessage Child Role id '20' does not exist
-     */
     public function testAddParentWrongChildId()
     {
+        $this->expectException('Zend_Acl_Role_Registry_Exception');
+        $this->expectExceptionMessage('Child Role id \'20\' does not exist');
         $roleId = 1;
         $parentRoleId = 2;
         list(, $parentRole) = $this->initRoles($roleId, $parentRoleId);
@@ -70,15 +77,13 @@ class RegistryTest extends \PHPUnit\Framework\TestCase
         $this->model->addParent(20, $parentRole);
     }
 
-    /**
-     * @expectedException \Zend_Acl_Role_Registry_Exception
-     * @expectedExceptionMessage Parent Role id '26' does not exist
-     */
     public function testAddParentWrongParentId()
     {
+        $this->expectException('Zend_Acl_Role_Registry_Exception');
+        $this->expectExceptionMessage('Parent Role id \'26\' does not exist');
         $roleId = 1;
         $parentRoleId = 2;
-        list($role,) = $this->initRoles($roleId, $parentRoleId);
+        list($role, ) = $this->initRoles($roleId, $parentRoleId);
 
         $this->model->addParent($role, 26);
     }

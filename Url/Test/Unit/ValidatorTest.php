@@ -3,22 +3,35 @@
  * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Framework\Url\Test\Unit;
 
+use Laminas\Validator\Uri;
 use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
+use Magento\Framework\Url\Validator;
+use PHPUnit\Framework\TestCase;
 
-class ValidatorTest extends \PHPUnit\Framework\TestCase
+class ValidatorTest extends TestCase
 {
-    /** @var \Magento\Framework\Url\Validator */
+    /** @var Validator */
     protected $object;
+
+    /** @var Uri */
+    protected $laminasValidator;
 
     /** @var string[] */
     protected $expectedValidationMessages = ['invalidUrl' => "Invalid URL '%value%'."];
 
-    protected function setUp()
+    protected function setUp(): void
     {
         $objectManager = new ObjectManager($this);
-        $this->object = $objectManager->getObject(\Magento\Framework\Url\Validator::class);
+
+        $this->laminasValidator = $this->createMock(Uri::class);
+        $this->object = $objectManager->getObject(
+            Validator::class,
+            ['validator' => $this->laminasValidator]
+        );
     }
 
     public function testConstruct()
@@ -28,13 +41,23 @@ class ValidatorTest extends \PHPUnit\Framework\TestCase
 
     public function testIsValidWhenValid()
     {
-        $this->assertEquals(true, $this->object->isValid('http://example.com'));
+        $this->laminasValidator
+            ->method('isValid')
+            ->with('http://example.com')
+            ->willReturn(true);
+
+        $this->assertTrue($this->object->isValid('http://example.com'));
         $this->assertEquals([], $this->object->getMessages());
     }
 
     public function testIsValidWhenInvalid()
     {
-        $this->assertEquals(false, $this->object->isValid('%value%'));
+        $this->laminasValidator
+            ->method('isValid')
+            ->with('%value%')
+            ->willReturn(false);
+
+        $this->assertFalse($this->object->isValid('%value%'));
         $this->assertEquals($this->expectedValidationMessages, $this->object->getMessages());
     }
 }

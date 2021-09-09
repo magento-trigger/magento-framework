@@ -33,6 +33,18 @@ class DbSchemaWriter implements DbSchemaWriterInterface
     ];
 
     /**
+     * Table options mapping
+     *
+     * @var array
+     */
+    private $tableOptions = [
+        'charset' => 'DEFAULT CHARSET',
+        'collation' => 'DEFAULT COLLATE',
+        'engine' => 'ENGINE',
+        'comment' => 'COMMENT'
+    ];
+
+    /**
      * @var ResourceConnection
      */
     private $resourceConnection;
@@ -48,20 +60,21 @@ class DbSchemaWriter implements DbSchemaWriterInterface
     private $dryRunLogger;
 
     /**
-     * Constructor.
-     *
      * @param ResourceConnection $resourceConnection
-     * @param StatementFactory $statementFactory
-     * @param DryRunLogger $dryRunLogger
+     * @param StatementFactory   $statementFactory
+     * @param DryRunLogger       $dryRunLogger
+     * @param array              $tableOptions
      */
     public function __construct(
         ResourceConnection $resourceConnection,
         StatementFactory $statementFactory,
-        DryRunLogger $dryRunLogger
+        DryRunLogger $dryRunLogger,
+        array $tableOptions = []
     ) {
         $this->resourceConnection = $resourceConnection;
         $this->statementFactory = $statementFactory;
         $this->dryRunLogger = $dryRunLogger;
+        $this->tableOptions = array_replace($this->tableOptions, $tableOptions);
     }
 
     /**
@@ -70,9 +83,11 @@ class DbSchemaWriter implements DbSchemaWriterInterface
     public function createTable($tableName, $resource, array $definition, array $options)
     {
         $sql = sprintf(
-            "(\n%s\n) ENGINE=%s %s",
+            "(\n%s\n) ENGINE=%s DEFAULT CHARSET=%s DEFAULT COLLATE=%s %s",
             implode(", \n", $definition),
             $options['engine'],
+            $options['charset'],
+            $options['collation'],
             isset($options['comment']) ? sprintf('COMMENT="%s"', $options['comment']) : ''
         );
 
@@ -86,8 +101,6 @@ class DbSchemaWriter implements DbSchemaWriterInterface
     }
 
     /**
-     * Drop table from MySQL database.
-     *
      * @inheritdoc
      */
     public function dropTable($tableName, $resource)
@@ -112,24 +125,34 @@ class DbSchemaWriter implements DbSchemaWriterInterface
      */
     private function getDropElementSQL($type, $name)
     {
+        $result = sprintf('DROP COLUMN %s', $name);
         switch ($type) {
             case Constraint::PRIMARY_TYPE:
-                return 'DROP PRIMARY KEY';
+                $result = 'DROP PRIMARY KEY';
+                break;
             case Constraint::UNIQUE_TYPE:
-                return sprintf('DROP KEY %s', $name);
+                $result = sprintf('DROP KEY %s', $name);
+                break;
             case \Magento\Framework\Setup\Declaration\Schema\Dto\Index::TYPE:
-                return sprintf('DROP INDEX %s', $name);
+                $result = sprintf('DROP INDEX %s', $name);
+                break;
             case Reference::TYPE:
-                return sprintf('DROP FOREIGN KEY %s', $name);
-            default:
-                return sprintf('DROP COLUMN %s', $name);
+                $result = sprintf('DROP FOREIGN KEY %s', $name);
+                break;
         }
+
+        return $result;
     }
 
     /**
-     * Add element to existing table: column, constraint or index.
-     *
      * @inheritdoc
+     *
+     * @param string $elementName
+     * @param string $resource
+     * @param string $tableName
+     * @param string $elementDefinition , for example: like CHAR(200) NOT NULL
+     * @param string $elementType
+     * @return Statement
      */
     public function addElement($elementName, $resource, $tableName, $elementDefinition, $elementType)
     {
@@ -150,6 +173,12 @@ class DbSchemaWriter implements DbSchemaWriterInterface
 
     /**
      * @inheritdoc
+     *
+     * @param string $tableName
+     * @param string $resource
+     * @param string $optionName
+     * @param string $optionValue
+     * @return Statement
      */
     public function modifyTableOption($tableName, $resource, $optionName, $optionValue)
     {
@@ -157,15 +186,19 @@ class DbSchemaWriter implements DbSchemaWriterInterface
             $tableName,
             $tableName,
             self::ALTER_TYPE,
-            sprintf("%s='%s'", strtoupper($optionName), $optionValue),
+            sprintf("%s='%s'", $this->tableOptions[$optionName], $optionValue),
             $resource
         );
     }
 
     /**
-     * Modify column and change its definition.
-     *
      * @inheritdoc
+     *
+     * @param  string $columnName
+     * @param  string $resource
+     * @param  string $tableName
+     * @param  string $columnDefinition
+     * @return Statement
      */
     public function modifyColumn($columnName, $resource, $tableName, $columnDefinition)
     {
@@ -184,6 +217,12 @@ class DbSchemaWriter implements DbSchemaWriterInterface
 
     /**
      * @inheritdoc
+     *
+     * @param string $resource
+     * @param string $elementName
+     * @param string $tableName
+     * @param string $type
+     * @return Statement
      */
     public function dropElement($resource, $elementName, $tableName, $type)
     {
@@ -211,7 +250,9 @@ class DbSchemaWriter implements DbSchemaWriterInterface
      */
     public function resetAutoIncrement($tableName, $resource)
     {
-        $sql = 'AUTO_INCREMENT = 1';
+        $autoIncrementValue = $this->getNextAutoIncrementValue($tableName, $resource);
+        $sql = "AUTO_INCREMENT = {$autoIncrementValue}";
+
         return $this->statementFactory->create(
             sprintf('RESET_AUTOINCREMENT_%s', $tableName),
             $tableName,
@@ -228,7 +269,11 @@ class DbSchemaWriter implements DbSchemaWriterInterface
     {
         foreach ($statementAggregator->getStatementsBank() as $statementBank) {
             $statementsSql = [];
-            /** @var Statement $statement */
+            $statement = null;
+
+            /**
+             * @var Statement $statement
+             */
             foreach ($statementBank as $statement) {
                 $statementsSql[] = $statement->getStatement();
             }
@@ -256,5 +301,28 @@ class DbSchemaWriter implements DbSchemaWriterInterface
                 }
             }
         }
+    }
+
+    /**
+     * Retrieve next value for AUTO_INCREMENT column.
+     *
+     * @param string $tableName
+     * @param string $resource
+     * @return int
+     */
+    private function getNextAutoIncrementValue(string $tableName, string $resource): int
+    {
+        $adapter = $this->resourceConnection->getConnection($resource);
+        $autoIncrementField = $adapter->getAutoIncrementField($tableName);
+        if ($autoIncrementField) {
+            $sql = sprintf('SELECT MAX(`%s`) + 1 FROM `%s`', $autoIncrementField, $tableName);
+            $adapter->resetDdlCache($tableName);
+            $stmt = $adapter->query($sql);
+
+            return (int)$stmt->fetchColumn();
+        } else {
+            return 1;
+        }
+
     }
 }
