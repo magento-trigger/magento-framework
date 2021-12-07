@@ -33,8 +33,11 @@ class TableNameArrayIterator extends \ArrayIterator
     }
 
     /**
+     * Return current array entry
+     *
      * @return string
      */
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->resourceConnection->getTableName(parent::current());

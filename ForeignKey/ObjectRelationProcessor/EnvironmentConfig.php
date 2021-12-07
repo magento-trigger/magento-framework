@@ -96,25 +96,29 @@ class EnvironmentConfig
     }
 
     /**
+     * Check if connection default or not, returns true if connection not default
+     *
      * @param string $connectionName
      * @return bool
      */
     private function isScalableForConnection($connectionName)
     {
         if (isset($this->connectionConfig[$connectionName])) {
-            // Check if connection default or not, returns true if connection not default
             return $this->connectionConfig[$connectionName] === false;
         }
         return false;
     }
 
     /**
+     * Loads configuration for all connections and updates cache.
+     *
      * @return void
      */
     private function loadConnectionsConfig()
     {
         $this->connectionConfig = $this->cache->load(self::CACHE_ID);
         if (false === $this->connectionConfig) {
+            $this->connectionConfig = [];
             foreach ($this->connectionNames as $connectionName) {
                 $this->connectionConfig[$connectionName] =
                     (bool)($this->config->getConnectionName($connectionName) == ResourceConnection::DEFAULT_CONNECTION);
